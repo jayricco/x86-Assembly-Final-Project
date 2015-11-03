@@ -1,0 +1,12 @@
+10/31
+ Grid Outputting
+11/7
+ flagging and removing flags
+11/14
+ clicking
+11/21
+ clicking cont...
+11/28
+ leveling (increasing difficulty)
+12/1
+ cleaning up code and optimizing
