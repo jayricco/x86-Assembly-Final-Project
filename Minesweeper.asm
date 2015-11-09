@@ -5,30 +5,50 @@ INCLUDE Irvine32.inc
 .data
   ;==================== Misc Variables
   total BYTE 0; keeps track of the total number of bombs marked 
-  N DWORD 10; size of current grid
-  flg BYTE 10; number of flags avaliable (equal to bombs)
-
-  ;keepLooping BYTE 1
-  ;nextLevel BYTE 0
+  N DWORD 20; size of current grid
+  
+  levelNum DWORD 1 ;what level player is on (1 is first level, 4 is the last level)
+  flg BYTE 25; number of flags avaliable (equal to number of bombs) (value is calculated by N + (5 * level)(10, ))
+  bombTotal BYTE 25; number of bombs total in current level: lv1 = 9, lv2 = 35, lv3 = 79, lv4 = 140 (value ~35% of volume (N times N))
+  
+  lvUp BYTE 0
+  bombExploded BYTE 0
 
   Counter DWORD 0
   FLAG BYTE 0
 
   X BYTE 0
   Y BYTE 0
-  ;===================== Keeping track of Flags
-  flagX BYTE 20 Dup(0)
-  flagY BYTE 20 Dup(0)
 
-  BombX BYTE 20 Dup(0)
-  BombY BYTE 20 Dup(0)
+  showBombs BYTE 1; If set to 1, the first grid will print "B" in the location of the bombs when they are generated
+  aroundArray BYTE 8 Dup(5)
+  aroundArrayX BYTE 8 Dup(5)
+  aroundArrayY BYTE 8 Dup(5)
+  ;===================== Keeping track of Flags
+  flagX BYTE 140 Dup(0)
+  flagY BYTE 140 Dup(0)
+
+  BombX BYTE 140 Dup(0)
+  BombY BYTE 140 Dup(0)
 
   GridValues BYTE 400 Dup(254) ;ESI values correspond to user input Via (x-1) + ((y-1) * N)
 
   XYinVals BYTE 6 Dup(0)
+
   ;====================== Text Color Changes
   GreyTextOnGray = Gray + (white * 16)
+  
+  lightBlueTextOnGray = lightBlue + (white * 16); 1 bomb Surrounding
+  GreenTextOnGray = Green + (white * 16); 2 bombs surrounding
+  RedTextOnGray = Red + (white * 16); 3 bombs surrounding
+  lightGreenTextOnGray = lightGreen + (white * 16); 4 bombs surrounding
+  CyanTextOnGray = Cyan + (white * 16); 5 bombs surrounding
+  MagentaTextOnGray = Magenta + (white * 16); 6 bombs surrounding
+  lightCyanTextOnGray = lightCyan + (white * 16); 7 bombs surrounding
+  lightRedTextOnGray = lightRed + (white * 16); 8 bombs surrounding
+
   DefaultColor = white + (black * 16)
+
   ;====================== Strings
   flgsLeft BYTE "You have ",0
   flgsLeft2 BYTE " flags remaining to be placed",0
@@ -41,7 +61,7 @@ INCLUDE Irvine32.inc
   rmFlagMsg BYTE "Enter a flag's location to remove (x,y): ",0
   clickMsg BYTE "Enter a location to click (x,y): ",0
 .code
-; - = - = - = - = - = - = - = - = - = - = - =  
+; - = - = - = - = - = - = - = - = - = - = - =  Starts the Program
 main PROC
   mov eax, DefaultColor
   call SetTextColor
@@ -49,22 +69,24 @@ main PROC
   Call Start
   exit
 main ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Handles most of the calls are the looping
 Start PROC
   nextLevel:
     ;call LevelUp ;need to make
 	call genBombs 
    contLevel:
      Call PrintGrid
+     call crlf
      Call Input
      call clrscr
    jmp contLevel
   jmp nextLevel
   ret
 Start ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Generate the Bomb Locations
 genBombs PROC  
-  movzx ecx, flg
+  mov ecx, 0
+  mov cl, bombTotal
   mov esi, 0
   Julia:    
     mov eax, N
@@ -90,52 +112,32 @@ genBombs PROC
 	inc esi
   loop Julia
 
-  movzx ecx, flg
-  mov esi, 0
-  mov eax, 0
-  Jul:
-     mov eax, 0
-	 mov al, BombY[esi]
-     dec eax
-     mov ebx, N
+;============================= For De-bugging
+
+  cmp showBombs, 1 
+  jne finBombs
+    movzx ecx, bombTotal
+    mov esi, 0
+    mov eax, 0
+    Jul:
+       mov eax, 0
+	   mov al, BombY[esi]
+       dec eax
+       mov ebx, N
    
-     call multiplication
-     mov ebx, 0
-     mov bl, BombX[esi]
-     dec ebx
+       call multiplication
+       mov ebx, 0
+       mov bl, BombX[esi]
+       dec ebx
    
-     add eax, ebx
-	 mov GridValues[eax], "B"
-	 inc esi
-  loop Jul
-    call crlf
+       add eax, ebx
+   	   mov GridValues[eax], "B"
+	   inc esi
+    loop Jul
+  finBombs:
   ret
 genBombs ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
-checkBombsXY PROC uses eax ebx ecx esi; check X and Y, 1 in dl if bomb location
-  mov ah, X
-  mov al, Y
-  
-  movzx ecx, flg
-  mov esi, 0
-  mov edx, 0
-
-  Julia:
-    cmp ah, BombX[esi]
-	  jne lp
-	cmp al, BombY[esi]
-	  jne lp
-    
-	mov dl, 1
-	jmp dne
-	
-	lp:
-	  inc esi
-  loop Julia
-  dne:
-  ret
-checkBombsXY ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Grabs the user's input for what to do (Click, Flag, Remove Flag)
 Input PROC
   mov edx, OFFSET inpMsg
   call WriteString
@@ -143,101 +145,111 @@ Input PROC
   call writechar
   call crlf
 
-  mov bl, 67 ; check for C or c
-  cmp bl, al
+  cmp al, 67; check for C or c
   je Click
-  mov bl, 99
-  cmp bl, al
+  cmp al, 99
   je Click
 
-  mov bl, 70 ; check for F or f
-  cmp bl, al
+  cmp al, 70; check for F or f
   je SFlag
-  mov bl, 102
-  cmp bl, al
+  cmp al, 102
   je SFlag
-
-  mov bl, 82 ; check for R or r
-  cmp bl, al
+ 
+  cmp al, 82; check for R or r
   je RFlag
-  mov bl, 114
-  cmp bl, al
+  cmp al, 114
   je RFlag
 
-  jmp Err ; other choice
+  jmp Err ; other choices
 
   Click:
     call userClicked
 	call crlf
     jmp cnt
   SFlag:
-    mov eax, 0
-	cmp flg, al
-	jle Err
+	cmp flg, 0
+	je Err
     Call setFlag
 	call crlf
     jmp cnt
   RFlag:
-    mov EAX, N
-	cmp flg, al
-	jge Err
+    mov al, flg
+	cmp al, bombTotal
+	je Err
     Call removeFlag
     jmp cnt
   Err:
     mov edx, OFFSET errorMsg
 	call WriteString
-	mov eax, 2500
+	mov eax, 1750
 	call Delay
   cnt:
   ret
 Input ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = If the user wants to click
 userClicked PROC
+  mov edx, OFFSET clickMsg
+  call WriteString
+
+  call ValidateInput
+  call XYRange
+  cmp dl, 1
+   je notValidC
+
+  ;DO THINGS HERE
   
+  ;Check if bomb
+  call checkbombsXY
+  cmp dl, 1 
+   je Boom
+  
+  ;check if bomb(s) surround
+  call checkAround
+  cmp dl, 0
+   jg Surrnd
+
+  ;otherwise whitespace
+  jmp whiteSpace
+
+  Boom:
+    mov bombExploded, 1
+    jmp finishC
+  Surrnd:
+    call convertXYVal
+    add dl, 48
+    mov GridValues[eax], dl
+    jmp finishC
+  whiteSpace:
+    call whitespaceClick
+    jmp finishC
+  notValidC:
+	call crlf
+    mov edx, OFFSET errorMsgSize
+	Call WriteString
+    
+	mov eax, 1750
+    call Delay
+  
+  finishC:
   ret
 userClicked ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Sets a Flag at user specified X,Y coordinates
 setFlag PROC
   mov edx, OFFSET setFlagMsg
   call WriteString
 
   call ValidateInput
-  mov al, 0
-  mov ah, 0
-  mov ebx, N
-  mov ecx, N
+  call XYRange
+  cmp dl, 1
+  je notValid
 
-  cmp ah, X
-  jge notValid
-  cmp al, y
-  jge notValid
+  call convertXYVal
 
-  mov eax, 15
-  call writeint
+  cmp GridValues[eax], 254
+  jne notValid
 
-  cmp bl, X
-    jl notValid
-  cmp cl, Y
-    jl notValid
-
-  ;ESI values correspond to user input Via (x-1) + ((y-1) * n)
-   mov eax, 0
-   mov al, Y
-   dec eax
-   mov ebx, N
-   
-   call multiplication
-   mov ebx, 0
-   mov bl, X
-   dec ebx
-   
-   add eax, ebx
-
-   cmp GridValues[eax], 88
-   je notValid
-
-   mov GridValues[eax], 88
-   dec flg
+  mov GridValues[eax], 88
+  dec flg
   jmp finish
 
   jmp finish
@@ -246,67 +258,44 @@ setFlag PROC
     mov edx, OFFSET errorMsgSize
 	Call WriteString
     
-	mov eax,2500
+	mov eax, 1750
     call Delay
   
   finish:
   ret
 setFlag ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Removes a Flag at user specified X,Y coordinates
 removeFlag PROC
   mov edx, OFFSET rmFlagMsg
   call WriteString
 
   call ValidateInput
-  mov al, 0
-  mov ah, 0
-  mov ebx, N
-  mov ecx, N
+  call XYRange
+  cmp dl, 1
+  je notValidrm
 
-  cmp ah, X
-  jge notValidrm
-  cmp al, y
-  jge notValidrm
+  call convertXYVal
 
-  mov eax, 15
-  call writeint
+  cmp GridValues[eax], 254
+  je notValidrm
+  cmp GridValues[eax], 66 ; compensate if debug is on and "B"s are on grid
+  je notValidrm
 
-  cmp bl, X
-    jl notValidrm
-  cmp cl, Y
-    jl notValidrm
-
-  ;ESI values correspond to user input Via (x-1) + ((y-1) * n)
-   mov eax, 0
-   mov al, Y
-   dec eax
-   mov ebx, N
-   
-   call multiplication
-   mov ebx, 0
-   mov bl, X
-   dec ebx
-   
-   add eax, ebx
-
-   cmp GridValues[eax], 254
-   je notValidrm
-
-   mov GridValues[eax], 254
-   inc flg
+  mov GridValues[eax], 254
+  inc flg
   jmp finishRm
   
   notValidrm:
     mov edx, OFFSET errorMsgSize
 	Call WriteString
     
-	mov eax,2500
+	mov eax , 1750
     call Delay
   
   finishRm:
   ret
 removeFlag ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Writes out the the shell of the grid, numbering and seperation lines (N X N in size)
 PrintGrid PROC
   mov edx, OFFSET flgsLeft
   call WriteString
@@ -470,13 +459,75 @@ PrintGrid PROC
   call crlf
   ret
 PrintGrid ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Populates the Minefield with proper Values
 GridFill PROC uses eax ebx ecx
   mov ecx, N
   
   fill:
     mov al, GridValues[esi]
+    
+    cmp al, 49
+      je Bombs1
+    cmp al, 50
+      je Bombs2
+    cmp al, 51
+      je Bombs3 
+    cmp al, 52
+      je Bombs4 
+    cmp al, 53
+      je Bombs5 
+    cmp al, 54
+      je Bombs6   
+    cmp al, 55
+      je Bombs7
+    cmp al, 56
+      je Bombs8
+    jmp other
+    
+    Bombs1:
+      mov eax, OFFSET lightBlueTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs2:
+      mov eax, OFFSET GreenTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs3:
+      mov eax, OFFSET RedTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs4:
+      mov eax, OFFSET lightGreenTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs5:
+      mov eax, OFFSET CyanTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs6:
+      mov eax, OFFSET MagentaTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs7:
+      mov eax, OFFSET lightCyanTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+     jmp other
+    Bombs8:
+      mov eax, OFFSET lightRedTextOnGray
+      call SetTextColor
+      mov al, GridValues[esi]
+    other:
     call writechar
+    
+    mov eax, OFFSET GreyTextOnGray
+    call SetTextColor
 
     mov ebx, 1
     cmp ecx, ebx
@@ -485,10 +536,11 @@ GridFill PROC uses eax ebx ecx
 	  call Space
     skp:	
 	  inc esi
-  loop fill
+   dec ecx
+  jnz fill
   ret
 GridFill ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Takes in user values; double checks they are numbers and stores them in X and Y
 ValidateInput PROC
   mov X, 0
   mov Y, 0
@@ -583,14 +635,291 @@ ValidateInput PROC
   XYFound:
   ret
 ValidateInput ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Update GridValues[] with whitespace and bomb values if a user has clicked on whitespace
+whitespaceClick PROC uses eax ebx ecx esi edi
+  call convertXYval
+  mov GridValues[eax], 250
+  call updateSurroundings
+  
+  mov edi, 0
+  call clearAroundArray
+  call fillAroundArray
+
+  cmp edi, 0 ;if no spaces around it
+  je done
+    mov ecx, 8
+	mov esi, 0
+
+	store:
+	  cmp aroundArray[esi], 3
+	  jne skp
+	    mov bh, aroundArrayX[esi]
+		mov bl, aroundArrayY[esi]
+		push bx
+	  skp:
+	  inc esi
+	loop store
+
+	mov eax, 0
+	mov ecx, edi
+	update:
+	  pop ax
+	  mov X, ah
+	  mov Y, al
+	  call whitespaceClick
+    loop update
+  Done:
+  ret
+whitespaceClick ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Does the updating outlined in whitespaceClick
+whitespaceUpdate PROC uses eax edx
+  call XYRange
+  cmp dl, 1
+  je LeaveAlone
+
+  call convertXYval
+
+  cmp GridValues[eax], 254 ;check if regular square, not flagged
+  jne LeaveAlone
+
+  call checkBombsXY; check to see if bomb at location
+  cmp dl, 1
+  je LeaveAlone
+
+  call checkAround
+  cmp dl, 0
+  jg putVal
+  
+   ;call convertXYval
+   ;mov GridValues[eax], 250
+   jmp LeaveAlone
+  putVal:
+    add dl, 48
+    call convertXYval
+    mov GridValues[eax], dl
+  LeaveAlone:
+  ret
+whitespaceUpdate ENDP
+; - = - = - = - = - = - = - = - = - = - = - = check X and Y, puts 1 in dl if there is a bomb at x,y
+checkBombsXY PROC uses eax ebx ecx esi
+  mov ah, X
+  mov al, Y
+  
+  movzx ecx, bombTotal
+  mov esi, 0
+  mov edx, 0
+
+  Julia:
+    cmp ah, BombX[esi]
+	  jne lp
+	cmp al, BombY[esi]
+	  jne lp
+    
+	mov dl, 1
+	jmp dne
+	
+	lp:
+	  inc esi
+  loop Julia
+  dne:
+  ret
+checkBombsXY ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Checks the 8 values around X and Y for bombs, number of bombs is stored in dl
+checkAround PROC uses eax ebx ecx esi edi
+  mov ch, X
+  mov cl, Y
+  mov eax, 0
+  checkVals:
+  ;x-2, y-2
+   sub X, 1
+   sub Y, 1
+   call checkBombsXY
+   add al, dl
+  ;x-1, y-2
+   inc X
+   call checkBombsXY
+   add al, dl
+  ;x-0, y-2
+   inc X
+   call checkBombsXY
+   add al, dl
+  ;x-2, y-1
+   sub X, 2
+   inc Y
+   call checkBombsXY
+   add al, dl
+  ;x-1, y-1
+   inc X
+   call checkBombsXY
+   add al, dl
+  ;x-0, y-1
+   inc X
+   call checkBombsXY
+   add al, dl
+  ;x-2, y-0
+   sub X, 2
+   inc Y
+   call checkBombsXY
+   add al, dl
+  ;x-1, y-0
+   inc X
+   call checkBombsXY
+   add al, dl
+  ;x-0, y-0
+   inc X
+   call checkBombsXY
+   add al, dl
+
+  mov dl, al
+  mov X, ch
+  mov Y, cl
+  ret
+checkAround ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Checks to make sure X and Y are within proper range, returns 0 if valid or 1 if invalid
+XYRange PROC uses eax ebx ecx
+  mov edx, 0
+  mov ebx, N
+  mov bh, 0
+  
+  cmp X, bl ;if X > N
+    jg bad
+  cmp Y, bl ;else if Y > N
+    jg bad
+  cmp X, 0  ;else if X <= 0
+    jle bad
+  cmp Y, 0 
+    jle bad ;else if Y <= 0
+  
+  jmp good  ;else
+  
+  bad:
+    mov dl, 1
+  good:
+  ret
+XYRange ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Converts X,Y coordinates to a single index value returned as eax
+convertXYVal PROC
+  ;eax values correspond to user input Via (x-1) + ((y-1) * n)
+   mov eax, 0
+   mov al, Y
+   dec eax
+   mov ebx, N
+   
+   call multiplication
+   mov ebx, 0
+   mov bl, X
+   dec ebx
+   
+   add eax, ebx
+  ret
+convertXYVal ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Outputs a Space
 Space PROC uses eax
   mov al, " "
   call writechar
   ret
 Space ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
-multiplication PROC uses ecx ;numbers into ebx and eax, stores in eax
+; - = - = - = - = - = - = - = - = - = - = - = Takes in values x,y and updates all area around them to proper values/whitespace
+updateSurroundings PROC uses edx edi esi
+  mov edi, 0
+  mov edx, 0
+  mov esi, 0
+
+  ;row above click
+  dec X
+  dec Y
+  call whitespaceUpdate
+  inc X
+  inc esi
+  call whitespaceUpdate
+  inc X
+  inc esi
+  call whitespaceUpdate
+  
+  ;row of click
+  sub X, 2
+  inc Y
+  inc esi
+  call whitespaceUpdate
+  inc x
+  call whitespaceUpdate
+  inc x
+  inc esi
+  call whitespaceUpdate
+  
+  ;row below click
+  sub X, 2
+  inc Y
+  inc esi
+  call whitespaceUpdate
+  inc X
+  inc esi
+  call whitespaceUpdate
+  inc X
+  inc esi
+  call whitespaceUpdate
+
+  dec X ;return to original values
+  dec Y
+  ret
+updateSurroundings ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Checks X,Y values and stores in AroundArray[esi], increases edi if white space
+fillAroundArray PROC uses eax edx ecx
+  mov edx, 0
+  call XYRange
+  cmp dl, 1
+   je zer
+ 
+  call checkBombsXY
+  mov edx, 0
+  cmp dl, 1
+   je boom
+  
+  call checkAround
+  mov edx, 0
+  cmp dl, 0
+   jg num
+
+  call convertXYVal
+  cmp GridValues[esi], 254
+   je whiteSp
+  mov aroundArray[esi], 0;assume null if not other option
+  jmp next
+ 
+  zer:
+   mov aroundArray[esi], 0
+   jmp next
+  whiteSp:
+   mov aroundArray[esi], 3
+   mov cl, X
+   mov ch, Y
+   mov aroundArrayX[esi], cl
+   mov aroundArrayY[esi], ch
+   inc edi
+   jmp next
+  boom:
+   mov aroundArray[esi], 1
+   jmp next
+  num:
+   mov aroundArray[esi], 2
+  next:  
+  ret
+fillAroundArray ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Fill AroundArray[] with zeros
+clearAroundArray PROC uses ecx esi
+  mov ecx, 8
+  mov esi, 0
+  Julia:
+    mov aroundArray[esi], 5
+	mov aroundArrayX[esi], 30
+	mov aroundArrayY[esi], 30
+    inc esi
+  loop Julia
+ 
+  ret
+clearAroundArray ENDP
+; - = - = - = - = - = - = - = - = - = - = - = takes numbers into ebx and eax, multiplies them, and store the result in eax
+multiplication PROC uses ecx
   mov ecx, ebx
   mov ebx, eax
   mov eax, 0
@@ -599,5 +928,14 @@ multiplication PROC uses ecx ;numbers into ebx and eax, stores in eax
   loop Julia
   ret
 multiplication ENDP
-; - = - = - = - = - = - = - = - = - = - = - =
+; - = - = - = - = - = - = - = - = - = - = - = Resets the Grid contents to blank state (default starting setting)
+resetField PROC uses ecx esi
+  mov ecx, 400
+  mov esi, 0
+  Julia:
+    mov GridValues[esi], 254
+    inc esi
+  loop Julia
+  ret
+resetField ENDP
 END main
