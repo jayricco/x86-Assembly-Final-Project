@@ -4,14 +4,12 @@ INCLUDE Irvine32.inc
 
 .data
   ;==================== Misc Variables
-  total BYTE 0; keeps track of the total number of bombs marked 
-  N DWORD 20; size of current grid
+  N DWORD 5; size of current grid
   
   levelNum DWORD 1 ;what level player is on (1 is first level, 4 is the last level)
-  flg BYTE 25; number of flags avaliable (equal to number of bombs) (value is calculated by N + (5 * level)(10, ))
-  bombTotal BYTE 25; number of bombs total in current level: lv1 = 9, lv2 = 35, lv3 = 79, lv4 = 140 (value ~35% of volume (N times N))
+  flg BYTE 9; number of flags avaliable (equal to number of bombs)
+  bombTotal BYTE 9; number of bombs total in current level: lv1 = 9, lv2 = 35, lv3 = 79, lv4 = 140 (value ~35% of volume (N times N))
   
-  lvUp BYTE 0
   bombExploded BYTE 0
 
   Counter DWORD 0
@@ -27,6 +25,7 @@ INCLUDE Irvine32.inc
   ;===================== Keeping track of Flags
   flagX BYTE 140 Dup(0)
   flagY BYTE 140 Dup(0)
+  FLGLOC DWORD 0
 
   BombX BYTE 140 Dup(0)
   BombY BYTE 140 Dup(0)
@@ -60,6 +59,19 @@ INCLUDE Irvine32.inc
   setFlagMsg BYTE "Enter a location to flag (x,y): ",0
   rmFlagMsg BYTE "Enter a flag's location to remove (x,y): ",0
   clickMsg BYTE "Enter a location to click (x,y): ",0
+
+  winMsg BYTE "Congradulations, you've beaten all 4 levels,",0
+  winMsg2 BYTE "Diffusing 263 bombs in total!",0
+  winMsg3 BYTE "YOU WIN!!",0
+
+  lvMsg BYTE "You have diffused all ",0
+  lvMsg2 BYTE " bombs, moving on to the next level!",0
+
+  lossMsg BYTE "You've Triggered a bomb.....",0
+  lossMsg2 BYTE "***GAME OVER***",0
+  lossMsg3 BYTE "What you you like to do? Press '1' to restart the level or '2' to quit: ",0
+
+  doneMsg BYTE "Thank you for playing!",0
 .code
 ; - = - = - = - = - = - = - = - = - = - = - =  Starts the Program
 main PROC
@@ -71,20 +83,191 @@ main PROC
 main ENDP
 ; - = - = - = - = - = - = - = - = - = - = - = Handles most of the calls are the looping
 Start PROC
+  jmp restart; to start the game with a clean slate
   nextLevel:
-    ;call LevelUp ;need to make
+    mov edx, 0
+    call LevelUp
+	cmp dl, 1
+	je win
+	restart:
+	call resetAll
 	call genBombs 
    contLevel:
      Call PrintGrid
      call crlf
      Call Input
      call clrscr
+	 call Update
+
+	 cmp dl, 0; nothing
+	 je contLevel
+	 cmp dl, 1; bombexploded
+	 je endGame
+	 cmp dl, 2; level up/win
+	 je nextLevel
+
    jmp contLevel
   jmp nextLevel
+  win:
+    call clrscr
+
+    mov edx, OFFSET winMsg
+	call writestring
+	call crlf
+	mov eax, 250
+	call delay
+
+	mov edx, OFFSET winMsg2
+	call writestring
+	call crlf
+    call delay
+
+
+	mov edx, OFFSET winMsg3
+	call writestring
+	call crlf
+	call crlf
+    call delay
+
+	jmp done
+  endGame:
+    call clrscr
+    call Loss
+    cmp dl, 1
+	je restart
+  done:
+  mov edx, OFFSET doneMsg
+  call writestring
+  call crlf
+  mov eax, 10000
+  call delay
   ret
 Start ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Checks to see if the bomb flag is high or all the flags match all the bomb XYs. returns 1 for bomb, 2 for flags matching, or 0 if no change
+Update PROC uses eax ebx ecx esi edi
+  cmp bombExploded, 1
+  jne nxt1
+    mov dl, 1
+	jmp done
+  nxt1:
+  
+  movzx eax, bombTotal
+  mov esi, 0
+ 
+  bombLoop:
+    movzx ebx, bombTotal
+    mov edi, 0
+	mov edx, 0
+	flagLoop:
+	  mov ecx, 0
+	  mov ch, flagX[edi]
+	  mov cl, flagY[edi]
+	  cmp ch, BombX[esi]
+	   jne lp
+     cmp cl, BombY[esi]
+	   jne lp
+       mov dl, 1
+	  lp:
+	inc edi
+    dec ebx
+	jnz flagLoop
+   cmp dl, 0
+   je done
+  inc esi
+  dec eax
+  jnz bombLoop
+  mov dl, 2; flags and bombs match
+
+  jmp done
+  done:
+  ret
+Update ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Sees if the user won(return 1), else handle level up
+levelUp PROC uses eax
+  mov eax, 4
+  cmp levelNum, eax
+  je win
+
+  call clrscr
+  mov edx, OFFSET lvMsg
+  call writestring
+  movzx eax, bombTotal
+  call writedec
+  mov edx, OFFSET lvMsg2
+  call writestring
+  call crlf
+  mov eax, 2000
+  call delay
+  call crlf
+  call crlf
+  add N, 5; increase grid size by 5
+  inc levelNum; add 1 to the current level
+
+
+  ; number of bombs total in current level: lv1 = 9, lv2 = 35, lv3 = 79, lv4 = 140 (value ~35% of volume (N times N))
+  mov eax, levelNum
+  cmp eax, 2
+    je two
+  cmp eax, 3
+    je three
+  cmp eax, 4
+    je four
+
+  two:
+    mov flg, 35
+	mov bombTotal, 35
+	jmp done
+  three:
+    mov flg, 79
+	mov bombTotal, 79
+	jmp done
+  four:
+    mov flg, 140
+	mov bombTotal, 140
+	jmp done
+  win:
+    mov dl, 1
+  done:
+  ret
+levelUp ENDP
+; - = - = - = - = - = - = - = - = - = - = - = Sees if the user wants to quit or restart level (1 in dl if restart)
+Loss PROC uses eax
+  mov edx, OFFSET lossMsg
+  call writestring
+  call crlf
+  mov eax, 250
+  call delay
+
+  mov edx, OFFSET lossMsg2
+  call writestring
+  call crlf
+  call delay
+
+
+  badInput:
+
+  mov eax, 0
+  mov edx, OFFSET lossMsg3
+  call writestring
+  call readint
+
+  mov edx, 0
+  cmp eax, 1
+    jne chk2
+	mov dl, 1
+	jmp done
+  chk2:
+  cmp eax, 2
+	je done
+	call clrscr
+	jmp badInput
+  done:
+  call crlf
+  call crlf
+  ret
+Loss ENDP
 ; - = - = - = - = - = - = - = - = - = - = - = Generate the Bomb Locations
-genBombs PROC  
+genBombs PROC uses eax ebx ecx esi
   mov ecx, 0
   mov cl, bombTotal
   mov esi, 0
@@ -246,11 +429,21 @@ setFlag PROC
   call convertXYVal
 
   cmp GridValues[eax], 254
+  je cnt
+  cmp GridValues[eax], 66
   jne notValid
 
+  cnt:
   mov GridValues[eax], 88
   dec flg
-  jmp finish
+  mov ah, X
+  mov al, Y
+  mov ebx, FLGLOC
+
+  mov flagX[ebx], ah
+  mov flagY[ebx], al
+
+  inc FLGLOC
 
   jmp finish
   notValid:
@@ -283,8 +476,45 @@ removeFlag PROC
 
   mov GridValues[eax], 254
   inc flg
-  jmp finishRm
   
+  mov esi, 0
+  mov ah, X
+  mov al, Y
+
+  movzx ecx, bombTotal
+  FindFlag:
+    cmp flagX[esi], ah
+	jne notMatch
+	cmp flagY[esi], al
+	jne notMatch
+	jmp found
+	notMatch:
+	 inc esi
+  loop FindFlag
+  found:
+
+  cmp esi, 139
+  jne cnt
+    mov flagX[139], 0
+	mov flagY[139], 0
+  cnt:
+
+  mov flagX[esi], 0;null out the removed flag
+  mov flagY[esi], 0
+  
+  shift:
+    mov bh, flagX[esi]
+	mov bl, flagY[esi]
+	xchg flagX[esi + 1], bh
+	xchg flagY[esi + 1], bl
+	mov flagX[esi], bh
+	mov flagY[esi], bl
+
+	inc esi
+  loop shift
+    
+  dec FLGLOC
+  jmp finishRm
   notValidrm:
     mov edx, OFFSET errorMsgSize
 	Call WriteString
@@ -662,12 +892,12 @@ whitespaceClick PROC uses eax ebx ecx esi edi
 
 	mov eax, 0
 	mov ecx, edi
-	update:
+	up:
 	  pop ax
 	  mov X, ah
 	  mov Y, al
 	  call whitespaceClick
-    loop update
+    loop up
   Done:
   ret
 whitespaceClick ENDP
@@ -929,13 +1159,31 @@ multiplication PROC uses ecx
   ret
 multiplication ENDP
 ; - = - = - = - = - = - = - = - = - = - = - = Resets the Grid contents to blank state (default starting setting)
-resetField PROC uses ecx esi
+resetAll PROC uses ecx esi
   mov ecx, 400
   mov esi, 0
   Julia:
     mov GridValues[esi], 254
     inc esi
   loop Julia
+
+  mov ecx, 140
+  mov esi, 0
+  Julia2:
+    mov flagX[esi], 0
+    mov flagY[esi], 0
+
+    mov BombX[esi], 0
+    mov BombY[esi], 0
+
+	inc esi
+  loop Julia2
+
+  mov bombExploded, 0
+  mov al, bombTotal
+  mov flg, al
+  
+  mov FLGLOC, 0
   ret
-resetField ENDP
+resetAll ENDP
 END main
