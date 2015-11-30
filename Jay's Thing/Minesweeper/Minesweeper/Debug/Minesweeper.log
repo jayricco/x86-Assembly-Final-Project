@@ -1,14 +1,9 @@
-﻿Build started 11/23/2015 12:01:25 AM.
-     1>Project "C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Minesweeper.vcxproj" on node 2 (Build target(s)).
-     1>_MASM:
-         Assembling Minesweeper.asm...
-         cmd.exe /C "C:\Users\riccoj\AppData\Local\Temp\tmpa28a1558ce0e4f61b3a073a59ba605b9.cmd"
-         ml.exe /c /nologo /Zi /Fo"Debug\Minesweeper.obj" /I "C:\Irvine" /I "C:\masm32\include" /W3 /errorReport:prompt  /TaMinesweeper.asm
-       Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Debug\Minesweeper.exe" /INCREMENTAL /NOLOGO /LIBPATH:c:\Irvine /LIBPATH:c:\masm32\lib irvine32.lib kernel32.lib user32.lib gdi32.lib /NODEFAULTLIB /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Debug\Minesweeper.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE:NO /NXCOMPAT /IMPLIB:"C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Debug\Minesweeper.lib" /MACHINE:X86 /SAFESEH:NO Debug\Minesweeper.obj
-         Minesweeper.vcxproj -> C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Debug\Minesweeper.exe
-     1>Done Building Project "C:\Users\riccoj\Documents\Visual Studio 2015\Projects\Minesweeper\Minesweeper\Minesweeper.vcxproj" (Build target(s)).
+﻿Build started 11/30/2015 4:37:21 PM.
+     1>Project "C:\Users\Jake\Documents\ASMProject1\Jay's Thing\Minesweeper\Minesweeper\Minesweeper.vcxproj" on node 2 (Build target(s)).
+     1>Link:
+         Minesweeper.vcxproj -> C:\Users\Jake\Documents\ASMProject1\Jay's Thing\Minesweeper\Minesweeper\Debug\Minesweeper.exe
+     1>Done Building Project "C:\Users\Jake\Documents\ASMProject1\Jay's Thing\Minesweeper\Minesweeper\Minesweeper.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:01.92
+Time Elapsed 00:00:00.03

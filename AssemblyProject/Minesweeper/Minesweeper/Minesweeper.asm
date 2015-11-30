@@ -122,11 +122,11 @@ showComponents BYTE 0
 
 currLevel DWORD 1
 maxLevel DWORD 4
-levelDimension BYTE 9, 15, 20, 35
+levelDimension BYTE 5, 10, 15, 20
 dimension DWORD ?
-levelMaxBombs BYTE 9, 15, 20, 35
+levelMaxBombs BYTE 6, 30, 79, 160
 maxBombs DWORD ?
-levelMaxFlags BYTE 9, 15, 20, 35
+levelMaxFlags BYTE 6, 30, 79, 160
 maxFlags DWORD ?
 
 totalTiles DWORD ?
@@ -173,7 +173,7 @@ resetHighlight DWORD 0
 clickFlag DWORD ?
 bombFlagged DWORD ?
 ;====Text Color Changes====
-GrayTextOnWhite = gray + (white * 16)
+GrayTextOnWhite = white + (gray * 16)
 WhiteTextOnGray = white + (gray * 16)
 BlackTextOnGray = black + (gray * 16)
 GrayTextOnGray = gray + (gray * 16)
