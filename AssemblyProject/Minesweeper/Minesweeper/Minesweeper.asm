@@ -1,35 +1,54 @@
-TITLE Lab#, Program Name, Jake Hall, Due Date
+TITLE Assembly Project: Minesweeper, Jay Ricco, Jake Hall, Alex Fallah
+
+.686
 .MODEL flat, STDCALL
-.386
 .STACK 4096
+
+OPTION CASEMAP:NONE
+INCLUDE Irvine32_NOWIN.inc
+INCLUDELIB Irvine32.lib
 INCLUDE Windows.inc
-INCLUDE Irvine32_NOWIN.inc 
-INCLUDE /masm32/include/kernel32.inc
-INCLUDE /masm32/include/user32.inc
-INCLUDELIB /masm32/lib/kernel32.lib
-INCLUDELIB /masm32/lib/user32.lib
+INCLUDE Kernel32.inc
+INCLUDELIB Kernel32.lib
+INCLUDE User32.inc
+INCLUDELIB User32.lib
+INCLUDE Gdi32.inc
+INCLUDELIB gdi32.lib
+
 checkTileInd PROTO, ind:DWORD
 padGrid PROTO, numSpace:DWORD
 writeGridRow PROTO, rowNum:DWORD
 enqueueValidNeighbors PROTO, ind:DWORD
 enterCoordinates PROTO, outMessage:DWORD
-clickEvent PROTO, X:DWORD, Y:DWORD
-
+initRasterDraw PROTO, fileStr:DWORD
 
 setColor MACRO color
 	pushad
 	mov eax, color
-	call setTextColor
+	invoke SetTextColor
 	popad
 ENDM
 
 putSpace MACRO
 	pushad
 	mov al, ' '
-	call writechar
+	call WriteChar
 	popad
 ENDM
-coordToInd MACRO X, Y, M
+
+levelToInd MACRO
+	push eax
+	push edx
+	mov eax, currLevel
+	dec eax
+	mov ebx, TYPE DWORD
+	mul ebx
+	mov ebx, eax
+	pop edx
+	pop eax
+ENDM
+
+CoordToInd MACRO X, Y, M
 LOCAL Xt
 LOCAL Yt
 .data
@@ -57,7 +76,8 @@ Yt DWORD ?
 	pop edx
 	pop ebx
 ENDM
-indToCoord MACRO I, M
+
+IndToCoord MACRO I, M
 LOCAL It
 .data
 It DWORD ?
@@ -76,6 +96,7 @@ inc edx
 mov ebx, edx
 pop edx
 ENDM
+
 TILE STRUCT
 	t_type BYTE ?
 	cMem BYTE ?
@@ -92,23 +113,30 @@ valueTable BYTE 1, 178, 10h, 10h, 254, 254
 
 bombDet BYTE 0
 gameWon BYTE 0
+levelWon BYTE 0
 reset BYTE 0
 quit BYTE 0
 
 showBombs BYTE 0
 showComponents BYTE 0
 
-dimension DWORD 20
-maxBombs DWORD 25
+currLevel DWORD 1
+maxLevel DWORD 4
+levelDimension BYTE 9, 15, 20, 35
+dimension DWORD ?
+levelMaxBombs BYTE 9, 15, 20, 35
+maxBombs DWORD ?
+levelMaxFlags BYTE 9, 15, 20, 35
+maxFlags DWORD ?
+
 totalTiles DWORD ?
 numActivated DWORD ?
-maxFlags DWORD 25
 numFlags DWORD 0
 
 firstClickInd SDWORD -1
 
-Grid TILE 400 DUP(<>)
-queue DWORD 400 DUP (0)
+Grid TILE 4000 DUP(<>)
+queue DWORD 4000 DUP (0)
 qsize DWORD 0
 qhead DWORD 0
 qtail DWORD 0
@@ -118,26 +146,53 @@ currLab BYTE 1
 errorFlg DWORD ?
 errorOffset DWORD ?
 
-hConWnd HWND ?
+loseBMP BYTE "resources\loser.bmp", 0
+winBMP BYTE "resources\winner.bmp", 0
+againBMP BYTE "resources\again.bmp", 0
+splashBMP BYTE "resources\splash.bmp", 0
+bmH DWORD ?
+bmW DWORD ?
+fileBuffer BYTE 3000 DUP(0)
+bitmapBuffer BYTE 3000 DUP(0)
 
+rHnd HANDLE ?
+oHnd HANDLE ?
+numEventsRead DWORD ?
+numEventsOccurred DWORD ?
+eventBuffer INPUT_RECORD 128 DUP(<>)
+
+Mouse_X DWORD ?
+Mouse_Y DWORD ?
+H_X DWORD ?
+H_Y DWORD ?
+PH_X DWORD -1
+PH_Y DWORD -1
+P_TYPE DWORD ?
+resetHighlight DWORD 0
+
+clickFlag DWORD ?
+bombFlagged DWORD ?
 ;====Text Color Changes====
-GrayTextOnWhite = Gray + (white * 16)
-WhiteTextOnGray = white + (Gray * 16)
-blacktextOnGray = black + (Gray * 16)
+GrayTextOnWhite = gray + (white * 16)
+WhiteTextOnGray = white + (gray * 16)
+BlackTextOnGray = black + (gray * 16)
+GrayTextOnGray = gray + (gray * 16)
 
-RedTextOnWhite = Red + (White * 16)
-CyanTextOnGray = Cyan + (Gray * 16)
-MagentaTextOnGray = Magenta + (Gray * 16)
+RedTextOnWhite = red + (white * 16)
+CyanTextOnGray = cyan + (gray * 16)
+MagentaTextOnGray = magenta + (gray * 16)
 
-lightBlueTextOnWhite = lightBlue + (White * 16)
+lightBlueTextOnWhite = lightBlue + (white * 16)
 
-lightBlueTextOnGray = lightBlue + (Gray * 16)
-lightGreenTextOnGray = lightGreen + (Gray * 16)
-lightCyanTextOnGray = lightCyan + (Gray * 16)
-lightRedTextOnGray = lightRed + (Gray * 16)
+lightBlueTextOnGray = lightBlue + (gray * 16)
+lightGreenTextOnGray = lightGreen + (gray * 16)
+lightCyanTextOnGray = lightCyan + (gray * 16)
+lightRedTextOnGray = lightRed + (gray * 16)
 
 DefaultColor = white + (black * 16)
-errorColor = lightRed + (black * 16)
+ErrorColor = lightRed + (black * 16)
+
+highlight = red + (yellow*16)
 
 ;====Strings====
 f_Status_1 BYTE "You have ", 0
@@ -152,7 +207,7 @@ maxFlagError BYTE "ERROR: You have already set all allowed flags, remove one fir
 noFlagError BYTE "ERROR: You cannot remove a flag you haven't set, young one...", 0
 
 coordMaxError BYTE "Error: Coordinates are outside of allowed range!", 0
-coordError BYTE "Error: Invalid Euclidian coordinates entered!", 0
+coordError BYTE "Error: Invalid Euclidean coordinates entered!", 0
 
 flag_rCoordError BYTE "Error: There's no flag here to remove...", 0
 flag_sCoordError BYTE "Error: That's not a flaggable space.", 0
@@ -166,15 +221,229 @@ clickPrompt BYTE "Enter a location to click (x,y): ", 0
 
 .code
 main PROC
-	setColor DefaultColor
+LOCAL cI:CONSOLE_CURSOR_INFO
+
+	mov cI.bVisible, 0
+	mov cI.dwSize, 100
+
 	call Randomize
+	invoke initRasterDraw, OFFSET splashBMP
+	call drawSplash
+	mov eax, 4000
+	call Delay
+	invoke GetStdHandle, STD_INPUT_HANDLE
+	mov rHnd, eax
+	invoke GetStdHandle, STD_OUTPUT_HANDLE
+	mov oHnd, eax
+	invoke SetConsoleCursorInfo, oHnd, ADDR cI
+	invoke SetConsoleMode, rHnd, ENABLE_LINE_INPUT OR ENABLE_MOUSE_INPUT OR ENABLE_EXTENDED_FLAGS
+	setColor DefaultColor
+
+
 init:
+
+levelLoop:
+	mov ebx, currLevel
+	dec ebx
+	movzx eax, levelDimension[ebx]
+	mov dimension, eax
+	movzx eax, levelMaxBombs[ebx]
+	mov maxBombs, eax
+	movzx eax, levelMaxFlags[ebx]
+	mov maxFlags, eax
+
+	call Clrscr
+	mov bombFlagged, 0
+	mov errorFlg, 0
+	mov errorOffset, 0
+	mov bombDet, 0
+	mov reset, 0
+	mov quit, 0
+	mov gameWon, 0
+	mov levelWon, 0
+	mov numFlags, 0
 	call generateBoard
 gameLoop:
-	call printGrid
-	call displayError
-	call userSelect
-	
+	call PrintGrid
+	call DisplayError
+	mov clickFlag, 0
+	mouseLoop:
+		invoke GetNumberOfConsoleInputEvents, rHnd, OFFSET numEventsOccurred
+		cmp numEventsOccurred, 0
+			je mouseLoop
+		invoke ReadConsoleInput, rHnd, OFFSET eventBuffer, numEventsOccurred, OFFSET numEventsRead
+		mov ecx, numEventsRead
+		mov esi, OFFSET eventBuffer
+		scanEvent:
+			cmp (INPUT_RECORD PTR [esi]).EventType, MOUSE_EVENT
+			jne checkKey
+
+			cmp (INPUT_RECORD PTR [esi]).MouseEvent.dwEventFlags, MOUSE_MOVED
+			jne checkClickL
+
+
+			cmp resetHighlight, 0
+			je doThing
+			
+			mov eax, PH_X
+			mov ebx, PH_Y
+			
+			mov dh, bl
+			mov dl, al
+			call Gotoxy
+
+			setColor GrayTextOnWhite
+
+			mov ebx, T_INACTIVE
+			mov al, valueTable[ebx]
+
+			call WriteChar
+			mov resetHighlight, 0
+
+			doThing:
+			movzx eax, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.x
+			test eax, 1h
+			jnz continue
+
+			mov H_X, eax
+
+			sub eax, 3
+			mov edx, 0
+			mov ebx, 2
+			div ebx
+			add eax, 1
+
+			cmp eax, 1
+			jl continue
+			cmp eax, dimension
+			jg continue
+
+			movzx ebx, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.y
+			mov H_Y, ebx
+			sub ebx, 4
+			cmp ebx, 1
+			jl continue
+			cmp ebx, dimension
+			jg continue
+
+
+			CoordToInd eax, ebx, TYPE Grid
+			mov edi, eax
+
+			cmp Grid[edi].t_type, T_ACTIVE
+			je continue
+			cmp Grid[edi].t_type, T_FLAG
+			je continue
+			cmp Grid[edi].t_type, T_FLAGGEDBOMB
+			je continue
+
+			movzx eax, Grid[edi].t_type
+			mov P_TYPE, eax
+
+			mov eax, H_X
+			mov ebx, H_Y
+			mov PH_X, eax
+			mov PH_Y, ebx
+			
+			mov resetHighlight, 1
+
+			mov dh, bl
+			mov dl, al
+			call Gotoxy
+
+			setColor highlight
+
+			mov ebx, T_INACTIVE
+			mov al, valueTable[ebx]
+			call WriteChar
+
+			jmp continue
+
+		checkClickL:
+			test (INPUT_RECORD PTR [esi]).MouseEvent.dwButtonState, FROM_LEFT_1ST_BUTTON_PRESSED
+			jz checkClickR
+			
+			movzx eax, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.x
+			test eax, 1h
+			jnz continue
+
+			mov clickFlag, 1
+			mov resetHighlight, 0
+			sub eax, 3
+			mov edx, 0
+			mov ebx, 2
+			div ebx
+			add eax, 1
+			cmp eax, 1
+			jl continue
+			cmp eax, dimension
+			jg continue
+			movzx ebx, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.y
+			sub ebx, 4
+			cmp ebx, 1
+			jl continue
+			cmp ebx, dimension
+			jg continue
+			mov Mouse_X, eax
+			mov Mouse_Y, ebx
+
+			call MouseClickL
+
+			jmp continue
+
+		checkClickR:
+			test (INPUT_RECORD PTR [esi]).MouseEvent.dwButtonState, RIGHTMOST_BUTTON_PRESSED 
+			jz continue
+			
+			movzx eax, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.x
+			test eax, 1h
+			jnz continue
+			mov clickFlag, 1
+			mov resetHighlight, 0
+			sub eax, 3
+			mov edx, 0
+			mov ebx, 2
+			div ebx
+			add eax, 1
+			cmp eax, 1
+			jl continue
+			cmp eax, dimension
+			jg continue
+			movzx ebx, (INPUT_RECORD PTR [esi]).MouseEvent.dwMousePosition.y
+			sub ebx, 4
+			cmp ebx, 1
+			jl continue
+			cmp ebx, dimension
+			jg continue
+			mov Mouse_X, eax
+			mov Mouse_Y, ebx
+
+			call MouseClickR
+
+		checkKey:
+			cmp (INPUT_RECORD PTR [esi]).EventType, KEY_EVENT
+			jne continue
+
+			mov eax, (INPUT_RECORD PTR [esi]).KeyEvent.bKeyDown
+			cmp eax, 1
+			jne continue
+			movzx eax, (INPUT_RECORD PTR [esi]).KeyEvent.wVirtualKeyCode
+			cmp eax, 1Bh
+			je pressedEscape
+
+			jmp continue
+		pressedEscape:
+			mov levelWon, 1
+			jmp break
+
+		continue:
+			setColor DefaultColor
+			add esi, TYPE INPUT_RECORD
+			dec ecx
+			jnz scanEvent
+		cmp clickFlag, 0
+		je mouseLoop
+break:
 	cmp reset, 1
 	je init
 	cmp quit, 1
@@ -183,19 +452,62 @@ gameLoop:
 	je gameLoss
 	cmp gameWon, 1
 	je gameWin
-
+	cmp levelWon, 1
+	je levelWin
+	jmp gameLoop
 gameLoss:
+	invoke initRasterDraw, OFFSET loseBMP
 	call youLost
 	jmp playAgain
 gameWin:
+	invoke initRasterDraw, OFFSET winBMP
 	call youWon
 playAgain:
+	mov currLevel, 1
+	mov eax, 1500
+	call Delay
+	invoke initRasterDraw, OFFSET againBMP
 	call againPrompt
 	cmp eax, 1
 	je init
+	jmp exitGame
+levelWin:
+	mov eax, currLevel
+	cmp eax, maxLevel
+	je gameWin
+	invoke initRasterDraw, OFFSET winBMP
+	call youWon
+	mov eax, 1500
+	call Delay
+	inc currLevel
+	mov levelWon, 0
+	jmp levelLoop
 exitGame:
-	;exit
+	exit
+	ret
 main ENDP
+
+drawSplash PROC
+	mov eax, bmH
+	mov ebx, bmW
+	mul ebx
+	mov ecx, eax
+	mov edi, 0
+	mov al, 219
+	print:
+		mov dl, bitmapBuffer[edi]
+		cmp dl, 1
+		je colorWhite
+		setColor BlackTextOnGray
+		jmp writeit1
+	colorWhite:
+		setColor DefaultColor
+	writeit1:
+		call WriteChar
+		inc edi
+	loop print
+	ret
+drawSplash ENDP
 
 ;------------------------------------------
 ;PROCEDURE: generateBoard
@@ -209,6 +521,11 @@ generateBoard PROC
 	sub eax, maxBombs
 	mov totalTiles, eax
 	mov numActivated, 0
+	mov firstClickInd, -1
+
+	mov qsize, 0
+	mov qhead, 0
+	mov qtail, 0
 
 	mov ecx, LENGTHOF Grid
 InitBoard:
@@ -235,17 +552,17 @@ loopGridArray:
 	;Generate Random Y
 	mov eax, dimension
 	dec eax
-	call randomRange
+	call RandomRange
 	inc eax
 	mov ebx, eax
 
 	;Generate Random X
 	mov eax, dimension
 	dec eax
-	call randomRange
+	call RandomRange
 	inc eax 
 	
-	coordToInd eax, ebx, TYPE Grid
+	CoordToInd eax, ebx, TYPE Grid
 	mov edx, eax
 	cmp edx, firstClickInd
 	je loopGridArray
@@ -322,170 +639,25 @@ done:
 	ret
 genBombs ENDP
 
-;------------------------------------------
-;PROCEDURE: userSelect
-;Retrieves the user's input
-;INPUT: NONE
-;OUTPUT: NONE
-;------------------------------------------
-userSelect PROC USES eax ebx edx
+;--------------------------------------------
+;PROCEDURE MouseClickL
+;Handles Mouse Left Click
+;INPUT: 
+;OUTPUT:
+;--------------------------------------------
+MouseClickL PROC 
+	pushad
+	mov eax, Mouse_X
+	mov ebx, Mouse_Y
 
-	mov edx, OFFSET inputPrompt
-	call WriteString
-	call EnterChar
-	cmp errorFlg, 1
-	je continue
-	call CRLF
-
-	and al, 0DFh
-	cmp al, 43h ;check for click
-	je Click
-	cmp al, 46h; check for set flag
-	je SetFlag
-	cmp al, 52h; check for remove flag
-	je RemoveFlag
-
-	jmp Err ;User hasn't entered a valid choice
-	
-Click:
-	invoke enterCoordinates, OFFSET clickPrompt
-	cmp eax, -1
-	je clickError_coord
-	
+	CoordToInd eax, ebx, TYPE Grid
 	cmp firstClickInd, -1
 	jne firstDone
-	CoordToInd eax, ebx, TYPE Grid
 	mov firstClickInd, eax
 	call genBombs
 	mov eax, firstClickInd
-	indToCoord eax, TYPE Grid
 
 	firstDone:
-	invoke clickEvent, eax, ebx
-
-	call CRLF
-	jmp continue
-clickError_coord:
-	call printGrid
-	call displayError
-	jmp Click
-clickError_active:
-	mov errorFlg, 1
-	mov edx, OFFSET clickErrActive
-	mov errorOffset, edx
-	call printGrid
-	call displayError
-	jmp Click
-clickError_flagged:
-	mov errorFlg, 1
-	mov edx, OFFSET clickErrFlag
-	mov errorOffset, edx
-	call printGrid
-	call displayError
-	jmp Click
-	
-SetFlag:
-	mov eax, maxFlags
-	cmp numFlags, eax
-	je SFlagError_max
-
-	invoke enterCoordinates, OFFSET setFlagPrompt
-	cmp eax, -1
-	je SFlagError_coord
-
-	coordToInd eax, ebx, TYPE Grid
-	cmp Grid[eax].t_type, T_ACTIVE
-	je SFlagError_noFlag
-
-	cmp Grid[eax].t_type, T_INACTIVE
-	jne tryBomb
-	mov Grid[eax].t_type, T_FLAG
-	jmp setFlagDone
-
-tryBomb:
-	cmp Grid[eax].t_type, T_BOMB
-	jne doNothing
-	mov Grid[eax].t_type, T_FLAGGEDBOMB
-
-setFlagDone:
-	inc numFlags
-doNothing:
-	call CRLF
-	jmp continue
-SFlagError_coord:
-	call printGrid
-	call DisplayError
-	jmp SetFlag
-SFlagError_max:
-	mov errorFlg, 1
-	mov edx, OFFSET maxFlagError
-	mov errorOffset, edx
-	jmp continue
-SFlagError_noFlag:
-	mov errorFlg, 1
-	mov edx, OFFSET flag_sCoordError
-	mov errorOffset, edx
-	jmp continue
-
-RemoveFlag:
-	cmp numFlags, 0
-	je RFlagError_none
-
-	invoke enterCoordinates, OFFSET rmFlagPrompt
-	cmp eax, -1
-	je RFlagError_coord
-
-	CoordToInd eax, ebx, TYPE Grid
-
-	cmp Grid[eax].t_type, T_FLAG
-	je isFlag
-	cmp Grid[eax].t_type, T_FLAGGEDBOMB
-	je isFBomb
-	jmp RFlagError_noFlag
-isFlag:
-	mov Grid[eax].t_type, T_INACTIVE
-	jmp rflagdone
-isFBomb:
-	mov Grid[eax].t_type, T_BOMB
-rflagdone:
-	dec numFlags
-	call CRLF
-	jmp continue
-
-RFlagError_coord:
-	call PrintGrid
-	call DisplayError
-	jmp RemoveFlag
-RFlagError_none:
-	mov errorFlg, 1
-	mov edx, OFFSET noFlagError
-	mov errorOffset, edx
-	jmp continue
-RFlagError_noFlag:
-	mov errorFlg, 1
-	mov edx, OFFSET flag_rCoordError
-	mov errorOffset, edx
-	jmp continue
-
-Err:
-	mov errorFlg, 1
-	mov edx, OFFSET chooseError
-	mov errorOffset, edx
-continue:
-	ret
-userSelect ENDP
-
-;-------------------------------------------
-;PROCEDURE: clickEvent
-;Registers and deals with a click 
-;INPUT: X, Y
-;OUTPUT: NONE
-;-------------------------------------------
-clickEvent PROC USES eax esi, X:DWORD, Y:DWORD
-	mov eax, X
-	mov ebx, Y
-
-	CoordToInd eax, ebx, TYPE Grid
 	mov esi, eax
 	cmp Grid[esi].t_type, T_BOMB
 	je detonation
@@ -495,7 +667,6 @@ clickEvent PROC USES eax esi, X:DWORD, Y:DWORD
 	je f_error
 	cmp Grid[esi].t_type, T_ACTIVE
 	je a_error
-
 
 	mov al, Grid[esi].cMem
 	mov edi, 0
@@ -508,22 +679,94 @@ board:
 	skip:
 	add edi, TYPE Grid
 	loop board
+	mov eax, numActivated
+	cmp eax, totalTiles
+	je levelwin
+	jmp done
+levelwin:
+	mov levelWon, 1
+	jmp done
+gamewin:
+	mov gameWon, 1
 	jmp done
 detonation:
 	mov bombDet, 1
 	jmp done
 f_error:
-	mov edx, OFFSET clickErrFlag
-	mov errorOffset, edx
-	mov errorFlg, 1
-	jmp done
+	;mov edx, OFFSET clickErrFlag
+	;mov errorOffset, edx
+	;mov errorFlg, 1
+	;jmp done
+	mov clickFlag, 0
 a_error:	
-	mov edx, OFFSET clickErrActive
-	mov errorOffset, edx
-	mov errorFlg, 1
+	mov clickFlag, 0
 done:
+	popad
 	ret
-clickEvent ENDP
+MouseClickL ENDP
+
+;--------------------------------------------
+;PROCEDURE MouseClickR
+;Handles Mouse Right Click
+;INPUT: 
+;OUTPUT:
+;--------------------------------------------
+MouseClickR PROC
+	pushad
+	CoordToInd eax, ebx, TYPE Grid
+
+	cmp Grid[eax].t_type, T_ACTIVE
+	je doNothing
+
+
+	cmp Grid[eax].t_type, T_INACTIVE
+	jne tryBomb
+	mov ebx, maxFlags
+	cmp numFlags, ebx
+	jge doNothing
+	mov Grid[eax].t_type, T_FLAG
+	inc numFlags
+	jmp continue
+
+tryBomb:
+	cmp Grid[eax].t_type, T_BOMB
+	jne tryFlag
+	mov ebx, maxFlags
+	cmp numFlags, ebx
+	jge doNothing
+	mov Grid[eax].t_type, T_FLAGGEDBOMB
+	inc numFlags
+	inc bombFlagged
+	mov eax, bombFlagged
+	cmp eax, maxBombs
+	jne continue
+	jmp levelwin
+
+tryFlag:
+	cmp Grid[eax].t_type, T_FLAG
+	jne tryBFlag
+
+	mov Grid[eax].t_type, T_INACTIVE
+	dec numFlags
+	jmp continue
+
+tryBFlag:
+	cmp Grid[eax].t_type, T_FLAGGEDBOMB
+	jne doNothing
+	
+	mov Grid[eax].t_type, T_BOMB
+	dec numFlags
+	jmp continue
+
+doNothing:
+	mov clickFlag, 0
+	jmp continue
+levelwin:
+	mov levelWon, 1
+continue:
+	popad
+	ret
+MouseClickR ENDP
 
 ;------------------------------------------
 ;PROCEDURE: checkTileInd
@@ -581,19 +824,19 @@ traverseY:
 		je continue
 
 		mov eax, self
-		indToCoord eax, TYPE Grid
+		IndToCoord eax, TYPE Grid
 		cmp eax, 1
 		jne checkOpp
-		indToCoord edx, TYPE Grid
-		cmp eax, 20
+		IndToCoord edx, TYPE Grid
+		cmp eax, dimension
 		je continue
 
 		checkOpp:
 		mov eax, self
-		indToCoord eax, TYPE Grid
-		cmp eax, 20
+		IndToCoord eax, TYPE Grid
+		cmp eax, dimension
 		jne fine
-		indToCoord edx, TYPE Grid
+		IndToCoord edx, TYPE Grid
 		cmp eax, 1
 		je continue
 
@@ -672,19 +915,19 @@ traverseY:
 			jge continue
 		;----------------------
 		mov eax, self
-		indToCoord eax, TYPE Grid
+		IndToCoord eax, TYPE Grid
 		cmp eax, 1
 			jne checkOpp
-		indToCoord edx, TYPE Grid
-		cmp eax, 20
+		IndToCoord edx, TYPE Grid
+		cmp eax, dimension
 			je continue
 
 	checkOpp:
 		mov eax, self
-		indToCoord eax, TYPE Grid
-		cmp eax, 20
+		IndToCoord eax, TYPE Grid
+		cmp eax, dimension
 			jne fine
-		indToCoord edx, TYPE Grid
+		IndToCoord edx, TYPE Grid
 		cmp eax, 1
 			je continue
 
@@ -699,7 +942,7 @@ traverseY:
 
 		invoke checkTileInd, edx
 		cmp eax, 0
-			jne wap
+			jne resetLab
 
 		mov al, currLab
 		mov Grid[edx].cMem, al
@@ -714,7 +957,7 @@ traverseY:
 		mov qtail, 0
 		jmp continue
 
-	wap:
+	resetLab:
 		mov al, currLab
 		mov Grid[edx].cMem, al
 	continue:
@@ -737,26 +980,26 @@ done:
 enqueueValidNeighbors ENDP
 
 ;------------------------------------------
-;PROCEDURE: printGrid
+;PROCEDURE: PrintGrid
 ;Draws the Dim x Dim grid into the console
 ;INPUT: NONE
 ;OUTPUT: NONE
 ;------------------------------------------
-printGrid PROC
+PrintGrid PROC
 	
-	call ClrScr
+	call Clrscr
 
 	mov edx, OFFSET f_Status_1
 	call WriteString
 
 	mov eax, maxFlags
 	sub eax, numFlags
-	call writeInt
+	call WriteInt
 
 	mov edx, OFFSET f_Status_2
 	call WriteString
-	call CRLF
-	call CRLF
+	call Crlf
+	call Crlf
 
 ;====X Coordinate Reference====
 	invoke padGrid, 4
@@ -771,12 +1014,12 @@ XRefTens:
 	inc al
 	mov ebx, 0
 printNextTen:
-	call writechar
+	call WriteChar
 	putSpace
 	inc ebx
 	loop XRefTens
 
-	call CRLF
+	call Crlf
 	mov ecx, dimension
 
 	invoke padGrid, 4
@@ -795,7 +1038,7 @@ prntNextOne:
 	invoke padGrid, 1
 	loop XRefOnes
 
-	call CRLF
+	call Crlf
 
 ;====Top of Grid====
 	invoke padGrid, 3
@@ -820,7 +1063,7 @@ seperation:
 	call WriteChar
 
 	setColor DefaultColor
-	call CRLF
+	call Crlf
 
 ;===========Grid Body===========
 	mov ebx, 30h
@@ -837,10 +1080,10 @@ row_wisePrint:
 
 printNums:
 	xchg al, bl
-	call writeChar
+	call WriteChar
 	xchg al, bl
 
-	call writeChar
+	call WriteChar
 	pushad
 ;=======Draw Left Wall=======
 	putSpace
@@ -855,7 +1098,7 @@ printNums:
 	call WriteChar
 ;====Reset For Next Row====
 	setColor DefaultColor
-	call CRLF
+	call Crlf
 	popad
 	inc dl
 	loop row_wisePrint
@@ -877,11 +1120,11 @@ bottom:
 	mov al, 188
 	call WriteChar
 	setColor DefaultColor
-	call CRLF
-	call CRLF
+	call Crlf
+	call Crlf
 
 	ret
-printGrid ENDP
+PrintGrid ENDP
 
 ;------------------------------------------
 ;PROCEDURE: writeGridRow
@@ -927,7 +1170,7 @@ Inactive:
 	jmp writeAndCont
 
 Active:
-	setColor BlackTextOnGray
+	setColor GrayTextOnGray
 	push ax
 	invoke checkTileInd, edi
 	pop dx
@@ -1007,7 +1250,7 @@ writeAndCont:
     je noDivider
 
 	mov al, 179
-	call writechar
+	call WriteChar
 	
 noDivider:
 	add edi, TYPE Grid
@@ -1038,7 +1281,7 @@ padGrid ENDP
 ;INPUT: NONE
 ;OUTPUT: al = input character
 ;------------------------------------------
-enterChar PROC USES ecx edx
+EnterChar PROC USES ecx edx
 LOCAL charBuff:BYTE
 LOCAL conHandle:HANDLE
 LOCAL conInfo:CONSOLE_SCREEN_BUFFER_INFO
@@ -1056,11 +1299,11 @@ mov initX, al
 mov eax, 0
 mov charBuff, 0
 askUser:
-	call readchar
+	call ReadChar
 
 	mov dh, initY
 	mov dl, initX
-	call goToXY
+	call Gotoxy
 
 	cmp ax, 011Bh
 		je escape
@@ -1069,7 +1312,7 @@ askUser:
 	cmp ax, 0E08h
 		je backsp
 	mov charBuff, al
-	call writeChar
+	call WriteChar
 	jmp askUser
 
 charRecieved:
@@ -1082,9 +1325,9 @@ backsp:
 	mov charBuff, 0
 	mov dh, initY
 	mov dl, initX
-	call goToXY
+	call Gotoxy
 	mov al, ' '
-	call writechar
+	call WriteChar
 	jmp askUser
 err:
 	mov edx, OFFSET inputError
@@ -1092,30 +1335,30 @@ err:
 	mov errorFlg, 1
 	jmp done
 escape:
-	mov bombDet, 1
+	mov quit, 1
 	ret
-enterChar ENDP
+EnterChar ENDP
 
 ;------------------------------------------
-;PROCEDURE: displayError
+;PROCEDURE: DisplayError
 ;Shows errpr
 ;INPUT: NONE
 ;OUTPUT: NONE
 ;------------------------------------------
-displayError PROC USES edx
+DisplayError PROC USES edx
 	cmp errorFlg, 1
 	jne done
 
-	setColor errorColor
+	setColor ErrorColor
 	mov edx, errorOffset
-	call writeString
+	call WriteString
 	setColor DefaultColor
-	call CRLF
+	call Crlf
 	mov errorFlg, 0
 
 done:
 	ret
-displayError ENDP
+DisplayError ENDP
 
 ;------------------------------------------
 ;PROCEDURE: enterCoordinates
@@ -1136,13 +1379,13 @@ LOCAL cFlag:DWORD
 LOCAL inLen:DWORD
 
 	mov edx, outMessage
-	call writeString
+	call WriteString
 	
 	mov cPos, 0
 	mov cFlag, 0
 	lea edx, strBuff
 	mov ecx, 20
-	call readString
+	call ReadString
 	cmp eax, 0
 	je invalid
 	mov inLen, eax
@@ -1293,9 +1536,26 @@ enterCoordinates ENDP
 ;OUTPUT: NONE
 ;------------------------------------------
 youLost PROC 
-LOCAL maxX:WORD
-LOCAL maxY:WORD
-LOCAL lInd:DWORD
+	call Clrscr
+	mov eax, bmH
+	mov ebx, bmW
+	mul ebx
+	mov ecx, eax
+	mov edi, 0
+	mov al, 219
+	print:
+		mov dl, bitmapBuffer[edi]
+		cmp dl, 1
+		je colorWhite
+		setColor RedTextOnWhite
+		jmp writeit
+	colorWhite:
+		setColor DefaultColor
+	writeit:
+		call WriteChar
+		inc edi
+	loop print
+	setColor DefaultColor
 	ret
 youLost ENDP
 
@@ -1306,7 +1566,26 @@ youLost ENDP
 ;OUTPUT: NONE
 ;------------------------------------------
 youWon PROC  
-	
+	call Clrscr
+	mov eax, bmH
+	mov ebx, bmW
+	mul ebx
+	mov ecx, eax
+	mov edi, 0
+	mov al, 219
+	print:
+		mov dl, bitmapBuffer[edi]
+		cmp dl, 1
+		je colorWhite
+		setColor lightGreenTextOnGray
+		jmp writeit
+	colorWhite:
+		setColor DefaultColor
+	writeit:
+		call WriteChar
+		inc edi
+	loop print
+	setColor DefaultColor
 	ret
 youWon ENDP
 
@@ -1317,25 +1596,196 @@ youWon ENDP
 ;OUTPUT: NONE
 ;------------------------------------------
 againPrompt PROC
-	
+	call Clrscr
+	mov eax, bmH
+	mov ebx, bmW
+	mul ebx
+	mov ecx, eax
+	mov edi, 0
+	mov al, 219
+	print:
+		mov dl, bitmapBuffer[edi]
+		cmp dl, 1
+		je colorWhite
+		setColor BlackTextOnGray
+		jmp writeit1
+	colorWhite:
+		setColor DefaultColor
+	writeit1:
+		call WriteChar
+		inc edi
+	loop print
+	setColor DefaultColor
+loopChar:
+	call ReadChar
+	cmp al, 'y'
+	je again
+	cmp al, 'n'
+	je qt
+	jmp loopChar
+again:
+	mov eax, 1
+	jmp done
+qt:
+	mov eax, 0
+done:
 	ret
 againPrompt ENDP
+
 ;------------------------------------------
 ;PROCEDURE: initRasterDraw
 ;Initializes everything for writing bitmap to console window
 ;INPUT: NONE
 ;OUTPUT: NONE
 ;------------------------------------------
-initDraw PROC
-LOCAL szClassName[128]:BYTE
-LOCAL tt[128]:BYTE
 
-;lodsb tt, "ttyGrab"
+initRasterDraw PROC USES eax ebx ecx edx edi esi, fileStr:DWORD
+LOCAL fsize:DWORD
+LOCAL w:DWORD
+LOCAL h:DWORD
+LOCAL ls:DWORD
+LOCAL wd:DWORD
+LOCAL revj:DWORD
+LOCAL i:DWORD
+LOCAL j:DWORD
+LOCAL fpos:DWORD
+LOCAL pos:DWORD
 
+	mov edx, fileStr
+	call OpenInputFile
 
-INVOKE GetWindow, ADDR hConWnd, GW_CHILD
-mov hConWnd, eax
-INVOKE GetClassName, hConWnd, ADDR szClassName, 128
+	mov edx, OFFSET fileBuffer
+	mov ecx, 3000
+	call ReadFromFile
+	mov fsize, eax
+
+	mov edi, 18
+	movzx eax, BYTE PTR fileBuffer[edi]
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 8
+	add eax, ebx
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 16
+	add eax, ebx
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 24
+	add eax, ebx
+	mov w, eax
+
+	mov edi, 22
+	movzx eax, BYTE PTR fileBuffer[edi]
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 8
+	add eax, ebx
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 16
+	add eax, ebx
+	inc edi
+	movzx ebx, BYTE PTR fileBuffer[edi]
+	shl ebx, 24
+	add eax, ebx
+	mov h, eax
+	
+	mov edx, 0
+	mov eax, w
+	mov ebx, 8
+	div ebx
+	mov wd, eax
+	mov edx, 0
+	mov ecx, eax
+	mov ebx, 4
+	div ebx
+	
+	mov eax, ecx
+	mov edx, edx
+	add eax, edx
+	mov ls, eax
+	mov eax, h
+	mov revj, eax
+	dec revj
+
+	mov j, 0
+	
+	mov ecx, h
+loopJ:	
+	push ecx
+
+	mov ecx, wd
+	mov i, 0
+	loopI:
+	;generate FPOS
+		mov edx, 0
+		mov eax, j
+		mov ebx, ls
+		mul ebx
+		add eax, i
+		add eax, 62
+		mov fpos, eax
+	;---------------
+	;generate POS
+
+		mov eax, revj 
+		mov ebx, w
+		mul ebx
+		mov edx, eax
+		push edx
+		mov eax, i
+		mov ebx, 8
+		mul ebx
+		pop edx
+		add eax, edx
+		
+		mov pos, eax
+		;----------------
+		push ecx
+			mov ecx, 0
+			mov edx, 8
+			loopK:
+				mov esi, fpos
+				mov eax, 0
+				mov al, BYTE PTR fileBuffer[esi]
+				shr al, cl
+				and al, 1h
+				
+				mov edi, pos
+				add edi, 7
+				sub edi, ecx
+
+				mov BYTE PTR bitmapBuffer[edi], al
+				
+				inc ecx
+				dec edx
+				cmp edx, 0
+				jg loopK
+		pop ecx
+		;-------------
+
+		inc i
+		dec ecx
+		cmp ecx, 0
+		jg loopI
+
+	pop ecx
+	inc j
+	dec revj
+	dec ecx
+	cmp ecx, 0
+	jg loopJ
+
+	mov eax, h
+	mov bmH, eax
+	mov eax, w
+	mov bmW, eax
+
+	mov dh, 0
+	mov dl, 0
+	call Gotoxy
+
 	ret
-initDraw ENDP
+initRasterDraw ENDP
 END main
