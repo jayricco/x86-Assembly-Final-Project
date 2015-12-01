@@ -774,6 +774,7 @@ tryBFlag:
 	
 	mov Grid[eax].t_type, T_BOMB
 	dec numFlags
+	dec bombFlagged
 	jmp continue
 
 doNothing:
