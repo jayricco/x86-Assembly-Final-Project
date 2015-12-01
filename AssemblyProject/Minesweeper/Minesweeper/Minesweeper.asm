@@ -259,7 +259,11 @@ LOCAL winsr_reset:SMALL_RECT
 	call Delay
 
 init:
+	
 levelLoop:
+	mov ecx, SIZEOF bitmapBuffer
+	mov ebx, 0
+
     setColor DefaultColor
 	mov ebx, currLevel
 	dec ebx
@@ -288,9 +292,16 @@ levelLoop:
 	mov levelWon, 0
 	mov numFlags, 0
 	mov numActivated, 0
+	mov numEventsOccurred, 0
+	mov numEventsRead, 0
+	mov qsize, 0
+	mov qhead, 0
+	mov qtail, 0
 	call generateBoard
+
 gameLoop:
 	call PrintGrid
+
 	mov clickFlag, 0
 	mouseLoop:
 		invoke GetNumberOfConsoleInputEvents, rHnd, OFFSET numEventsOccurred
@@ -480,6 +491,7 @@ break:
 gameLoss:
 	invoke initRasterDraw, OFFSET loseBMP
 	call youLost
+	mov bombDet, 0
 	jmp playAgain
 gameWin:
 	invoke initRasterDraw, OFFSET winBMP
@@ -1406,6 +1418,7 @@ againPrompt ENDP
 ;------------------------------------------
 
 initRasterDraw PROC USES eax ebx ecx edx edi esi, fileStr:DWORD
+LOCAL fHand:DWORD
 LOCAL fsize:DWORD
 LOCAL w:DWORD
 LOCAL h:DWORD
@@ -1419,11 +1432,16 @@ LOCAL pos:DWORD
 
 	mov edx, fileStr
 	call OpenInputFile
+	mov fHand, eax
 
 	mov edx, OFFSET fileBuffer
 	mov ecx, 3000
 	call ReadFromFile
+
 	mov fsize, eax
+
+	mov eax, fHand
+	call CloseFile
 
 	mov edi, 18
 	movzx eax, BYTE PTR fileBuffer[edi]
