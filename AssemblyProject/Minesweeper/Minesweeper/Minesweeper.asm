@@ -261,9 +261,6 @@ LOCAL winsr_reset:SMALL_RECT
 init:
 	
 levelLoop:
-	mov ecx, SIZEOF bitmapBuffer
-	mov ebx, 0
-
     setColor DefaultColor
 	mov ebx, currLevel
 	dec ebx
