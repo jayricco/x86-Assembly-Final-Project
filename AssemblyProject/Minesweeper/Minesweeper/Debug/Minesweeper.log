@@ -1,14 +1,14 @@
-﻿Build started 11/30/2015 4:50:33 PM.
-     1>Project "C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Minesweeper.vcxproj" on node 2 (Build target(s)).
+﻿Build started 12/1/2015 2:10:51 PM.
+     1>Project "C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Minesweeper.vcxproj" on node 2 (Build target(s)).
      1>_MASM:
          Assembling Minesweeper.asm...
-         cmd.exe /C "C:\Users\Jake\AppData\Local\Temp\tmp001615c1199446da8eb1d2d65aed1827.cmd"
+         cmd.exe /C "C:\Users\riccoj\AppData\Local\Temp\tmpcaa39448d5bb450fb34d4520e9844126.cmd"
          ml.exe /c /nologo /Zi /Fo"Debug\Minesweeper.obj" /I "C:\Irvine" /I "C:\masm32\include" /W3 /errorReport:prompt  /TaMinesweeper.asm
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.exe" /INCREMENTAL /NOLOGO irvine32.lib kernel32.lib user32.lib gdi32.lib /NODEFAULTLIB /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /Debug /PDB:"C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE:NO /NXCOMPAT /IMPLIB:"C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.lib" /MACHINE:X86 /SAFESEH:NO Debug\Minesweeper.obj
-         Minesweeper.vcxproj -> C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.exe
-     1>Done Building Project "C:\Users\Jake\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Minesweeper.vcxproj" (Build target(s)).
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.exe" /INCREMENTAL /NOLOGO irvine32.lib kernel32.lib user32.lib gdi32.lib /NODEFAULTLIB /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE:NO /NXCOMPAT /IMPLIB:"C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.lib" /MACHINE:X86 /SAFESEH:NO Debug\Minesweeper.obj
+         Minesweeper.vcxproj -> C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Debug\Minesweeper.exe
+     1>Done Building Project "C:\Users\riccoj\Documents\ASMProject1\AssemblyProject\Minesweeper\Minesweeper\Minesweeper.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:00.44
+Time Elapsed 00:00:01.73

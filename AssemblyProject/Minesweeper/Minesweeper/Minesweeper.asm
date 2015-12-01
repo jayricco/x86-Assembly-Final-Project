@@ -109,10 +109,10 @@ T_ACTIVE = 4
 T_INACTIVE = 5
 
 .data
+
 valueTable BYTE 1, 178, 10h, 10h, 254, 254
 
 bombDet BYTE 0
-gameWon BYTE 0
 levelWon BYTE 0
 reset BYTE 0
 quit BYTE 0
@@ -130,6 +130,7 @@ levelMaxFlags BYTE 6, 30, 79, 160
 maxFlags DWORD ?
 
 totalTiles DWORD ?
+totalTilesSO DWORD ?
 numActivated DWORD ?
 numFlags DWORD 0
 
@@ -143,13 +144,11 @@ qtail DWORD 0
 
 currLab BYTE 1
 
-errorFlg DWORD ?
-errorOffset DWORD ?
-
 loseBMP BYTE "resources\loser.bmp", 0
 winBMP BYTE "resources\winner.bmp", 0
 againBMP BYTE "resources\again.bmp", 0
 splashBMP BYTE "resources\splash.bmp", 0
+
 bmH DWORD ?
 bmW DWORD ?
 fileBuffer BYTE 3000 DUP(0)
@@ -167,11 +166,11 @@ H_X DWORD ?
 H_Y DWORD ?
 PH_X DWORD -1
 PH_Y DWORD -1
-P_TYPE DWORD ?
 resetHighlight DWORD 0
 
 clickFlag DWORD ?
 bombFlagged DWORD ?
+
 ;====Text Color Changes====
 GrayTextOnWhite = white + (gray * 16)
 WhiteTextOnGray = white + (gray * 16)
@@ -198,51 +197,70 @@ highlight = red + (yellow*16)
 f_Status_1 BYTE "You have ", 0
 f_Status_2 BYTE " flags remaining to be placed.", 0
 
-inputPrompt BYTE "Would you like to Click (C), Set a Flag(F), or Remove a Flag (R): ", 0
-
-chooseError BYTE "ERROR: You entered an invalid choice!", 0
-inputError BYTE "ERROR: That was an invalid input!", 0
-
-maxFlagError BYTE "ERROR: You have already set all allowed flags, remove one first!", 0
-noFlagError BYTE "ERROR: You cannot remove a flag you haven't set, young one...", 0
-
-coordMaxError BYTE "Error: Coordinates are outside of allowed range!", 0
-coordError BYTE "Error: Invalid Euclidean coordinates entered!", 0
-
-flag_rCoordError BYTE "Error: There's no flag here to remove...", 0
-flag_sCoordError BYTE "Error: That's not a flaggable space.", 0
-
-clickErrFlag BYTE "Can't click there, it's flagged!", 0
-clickErrActive BYTE "Can't click there, that location's already been uncovered!", 0
-
-setFlagPrompt BYTE "Enter a location to flag (x,y): ", 0
-rmFlagPrompt BYTE "Enter a flag's location to remove (x,y): ", 0
-clickPrompt BYTE "Enter a location to click (x,y): ", 0
+winTitle BYTE "ASM Minesweeper", 0
+face BYTE "Terminal", 0
 
 .code
 main PROC
 LOCAL cI:CONSOLE_CURSOR_INFO
+LOCAL sbi:CONSOLE_SCREEN_BUFFER_INFO
+LOCAL sbSize:DWORD
+LOCAL sbSize_reset:DWORD
+LOCAL winsr:SMALL_RECT
+LOCAL winsr_reset:SMALL_RECT
 
-	mov cI.bVisible, 0
-	mov cI.dwSize, 100
-
-	call Randomize
-	invoke initRasterDraw, OFFSET splashBMP
-	call drawSplash
-	mov eax, 4000
-	call Delay
 	invoke GetStdHandle, STD_INPUT_HANDLE
 	mov rHnd, eax
 	invoke GetStdHandle, STD_OUTPUT_HANDLE
 	mov oHnd, eax
+
+	mov cI.bVisible, 0
+	mov cI.dwSize, 100
+
+	mov eax, 30
+	shl eax, 16
+	mov ax, 80
+
+	mov sbSize, eax
+
+	mov winsr.Left, 0
+	mov winsr.Top, 0
+	mov winsr.Right, 79
+	mov winsr.Bottom, 29
+
+	invoke SetConsoleWindowInfo, oHnd, 1, ADDR winsr
+
+	invoke GetConsoleScreenBufferInfo, oHnd, ADDR sbi
+	mov eax, sbi.dwSize
+	mov sbSize_reset, eax
+
+	mov ax, sbi.srWindow.Left
+	mov winsr_reset.Left, ax
+	mov ax, sbi.srWindow.Top
+	mov winsr_reset.Top, ax
+	mov ax, sbi.srWindow.Right
+	mov winsr_reset.Right, ax
+	mov ax, sbi.srWindow.Bottom
+	mov winsr_reset.Bottom, ax
+
+
+	invoke SetConsoleScreenBufferSize, oHnd, sbSize
+	invoke SetConsoleTitle, OFFSET winTitle
+
 	invoke SetConsoleCursorInfo, oHnd, ADDR cI
 	invoke SetConsoleMode, rHnd, ENABLE_LINE_INPUT OR ENABLE_MOUSE_INPUT OR ENABLE_EXTENDED_FLAGS
-	setColor DefaultColor
 
+
+	call Randomize
+
+	invoke initRasterDraw, OFFSET splashBMP
+	call drawSplash
+	mov eax, 4000
+	call Delay
 
 init:
-
 levelLoop:
+    setColor DefaultColor
 	mov ebx, currLevel
 	dec ebx
 	movzx eax, levelDimension[ebx]
@@ -252,20 +270,27 @@ levelLoop:
 	movzx eax, levelMaxFlags[ebx]
 	mov maxFlags, eax
 
+	mov eax, dimension
+	mov ebx, dimension
+	mul ebx
+	
+	mov totalTiles, eax
+
+	mov ebx, TYPE Grid
+	mul ebx
+	mov totalTilesSO, eax
+	
 	call Clrscr
 	mov bombFlagged, 0
-	mov errorFlg, 0
-	mov errorOffset, 0
 	mov bombDet, 0
 	mov reset, 0
 	mov quit, 0
-	mov gameWon, 0
 	mov levelWon, 0
 	mov numFlags, 0
+	mov numActivated, 0
 	call generateBoard
 gameLoop:
 	call PrintGrid
-	call DisplayError
 	mov clickFlag, 0
 	mouseLoop:
 		invoke GetNumberOfConsoleInputEvents, rHnd, OFFSET numEventsOccurred
@@ -338,7 +363,6 @@ gameLoop:
 			je continue
 
 			movzx eax, Grid[edi].t_type
-			mov P_TYPE, eax
 
 			mov eax, H_X
 			mov ebx, H_Y
@@ -433,7 +457,7 @@ gameLoop:
 
 			jmp continue
 		pressedEscape:
-			mov levelWon, 1
+			mov quit, 1
 			jmp break
 
 		continue:
@@ -450,8 +474,6 @@ break:
 	je exitGame
 	cmp bombDet, 1
 	je gameLoss
-	cmp gameWon, 1
-	je gameWin
 	cmp levelWon, 1
 	je levelWin
 	jmp gameLoop
@@ -482,7 +504,10 @@ levelWin:
 	inc currLevel
 	mov levelWon, 0
 	jmp levelLoop
+
 exitGame:
+	invoke SetConsoleScreenBufferSize, oHnd, sbSize_reset
+	invoke SetConsoleWindowInfo, oHnd, 1, ADDR winsr_reset
 	exit
 	ret
 main ENDP
@@ -517,7 +542,7 @@ drawSplash ENDP
 ;------------------------------------------
 generateBoard PROC
 	mov edx, 0
-	mov eax, LENGTHOF Grid
+	mov eax, totalTiles
 	sub eax, maxBombs
 	mov totalTiles, eax
 	mov numActivated, 0
@@ -527,7 +552,7 @@ generateBoard PROC
 	mov qhead, 0
 	mov qtail, 0
 
-	mov ecx, LENGTHOF Grid
+	mov ecx, totalTilesSO
 InitBoard:
 	mov BYTE PTR Grid[edx].t_type, T_INACTIVE
 	mov BYTE PTR Grid[edx].cMem, 0
@@ -544,7 +569,7 @@ generateBoard ENDP
 ;OUTPUT: NONE
 ;------------------------------------------
 genBombs PROC USES eax ebx ecx edx
-
+	mov currLab, 1
 	mov ebx, 0
 	mov ecx, maxBombs
 loopGridArray: 
@@ -579,12 +604,12 @@ loopGridArray:
 turnflagged:
 	mov BYTE PTR Grid[edx].t_type, T_FLAGGEDBOMB
 contLoop:
-	;mov BYTE PTR Grid[edx].cMem, -1
 	dec ecx
 	jnz loopGridArray
+
 ;====Connected Component Building====
 	mov ebx, 0
-	mov ecx, LENGTHOF Grid
+	mov ecx, totalTilesSO
 loopOverTiles:
 
 	cmp Grid[ebx].cMem, 0
@@ -670,7 +695,7 @@ MouseClickL PROC
 
 	mov al, Grid[esi].cMem
 	mov edi, 0
-	mov ecx, LENGTHOF Grid
+	mov ecx, totalTilesSO
 board:
 	cmp Grid[edi].cMem, al
 	jne skip
@@ -686,17 +711,10 @@ board:
 levelwin:
 	mov levelWon, 1
 	jmp done
-gamewin:
-	mov gameWon, 1
-	jmp done
 detonation:
 	mov bombDet, 1
 	jmp done
 f_error:
-	;mov edx, OFFSET clickErrFlag
-	;mov errorOffset, edx
-	;mov errorFlg, 1
-	;jmp done
 	mov clickFlag, 0
 a_error:	
 	mov clickFlag, 0
@@ -788,9 +806,10 @@ LOCAL chX:DWORD
 	cmp Grid[eax].t_type, T_FLAGGEDBOMB
 	je invalid
 
-	cmp ind, 0
+	mov eax, ind
+	cmp eax, 0
 	jl invalid
-	cmp ind, SIZEOF Grid
+	cmp eax, totalTilesSO
 	jge invalid
 
 	mov eax, dimension
@@ -818,7 +837,7 @@ traverseY:
 	traverseX:
 		cmp edx, 0
 		jl continue
-		cmp edx, SIZEOF Grid
+		cmp edx, totalTilesSO
 		jge continue
 		cmp edx, self
 		je continue
@@ -911,7 +930,7 @@ traverseY:
 		cmp edx, 0
 			jl continue
 
-		cmp edx, SIZEOF Grid
+		cmp edx, totalTilesSO
 			jge continue
 		;----------------------
 		mov eax, self
@@ -1228,7 +1247,7 @@ eightBColor:
 	jmp asciiadjust
 
 Flag:
-	setColor lightBlueTextOnWhite
+	setColor lightBlueTextOnGray
 	jmp writeAndCont
 
 Bomb:
@@ -1274,260 +1293,6 @@ loopPad:
 	pop ecx
 	ret
 padGrid ENDP
-
-;------------------------------------------
-;PROCEDURE: enterChar
-;Allows user to enter character; blocks for ENTER press
-;INPUT: NONE
-;OUTPUT: al = input character
-;------------------------------------------
-EnterChar PROC USES ecx edx
-LOCAL charBuff:BYTE
-LOCAL conHandle:HANDLE
-LOCAL conInfo:CONSOLE_SCREEN_BUFFER_INFO
-LOCAL initX:BYTE
-LOCAL initY:BYTE
-
-INVOKE GetStdHandle, STD_OUTPUT_HANDLE
-mov conHandle, eax
-INVOKE GetConsoleScreenBufferInfo, conHandle, ADDR conInfo
-mov ax, (COORD PTR conInfo.dwCursorPosition).y
-mov initY, al
-mov ax, (COORD PTR conInfo.dwCursorPosition).x
-mov initX, al
-
-mov eax, 0
-mov charBuff, 0
-askUser:
-	call ReadChar
-
-	mov dh, initY
-	mov dl, initX
-	call Gotoxy
-
-	cmp ax, 011Bh
-		je escape
-	cmp ax, 1C0Dh
-		je charRecieved
-	cmp ax, 0E08h
-		je backsp
-	mov charBuff, al
-	call WriteChar
-	jmp askUser
-
-charRecieved:
-	cmp charBuff, 0
-	je err
-done:
-	mov al, charBuff
-	ret
-backsp:
-	mov charBuff, 0
-	mov dh, initY
-	mov dl, initX
-	call Gotoxy
-	mov al, ' '
-	call WriteChar
-	jmp askUser
-err:
-	mov edx, OFFSET inputError
-	mov errorOffset, edx
-	mov errorFlg, 1
-	jmp done
-escape:
-	mov quit, 1
-	ret
-EnterChar ENDP
-
-;------------------------------------------
-;PROCEDURE: DisplayError
-;Shows errpr
-;INPUT: NONE
-;OUTPUT: NONE
-;------------------------------------------
-DisplayError PROC USES edx
-	cmp errorFlg, 1
-	jne done
-
-	setColor ErrorColor
-	mov edx, errorOffset
-	call WriteString
-	setColor DefaultColor
-	call Crlf
-	mov errorFlg, 0
-
-done:
-	ret
-DisplayError ENDP
-
-;------------------------------------------
-;PROCEDURE: enterCoordinates
-;Allows user to enter coordinates
-;INPUT: NONE
-;OUTPUT: eax = X, ebx = Y
-;------------------------------------------
-enterCoordinates PROC USES ecx edx esi edi, outMessage:DWORD
-LOCAL X:DWORD
-LOCAL Y:DWORD
-LOCAL strBuff[20]:BYTE
-LOCAL xStr[20]:BYTE
-LOCAL yStr[20]:BYTE
-LOCAL yStrLen:DWORD
-LOCAL xStrLen:DWORD
-LOCAL cPos:DWORD
-LOCAL cFlag:DWORD
-LOCAL inLen:DWORD
-
-	mov edx, outMessage
-	call WriteString
-	
-	mov cPos, 0
-	mov cFlag, 0
-	lea edx, strBuff
-	mov ecx, 20
-	call ReadString
-	cmp eax, 0
-	je invalid
-	mov inLen, eax
-	mov ebx, 0
-	mov esi, 0 ;X
-	mov edi, 0 ;Y
-	mov ecx, eax
-passOne:
-	movzx edx, BYTE PTR strBuff[ebx]
-	cmp dl, ','
-	jne continue
-	mov cFlag, 1
-	mov cPos, ebx
-	jmp nextPass
-
-continue:
-	cmp cFlag, 1
-	je addToY
-
-	mov BYTE PTR xStr[esi], dl
-	inc esi
-	jmp nextPass
-addToY:
-	mov BYTE PTR yStr[edi], dl
-	inc edi
-nextPass:
-	inc ebx
-	loop passOne
-
-mov xStrLen, esi
-mov yStrLen, edi
-
-mov eax, cPos
-cmp cPos, 0
-je invalid
-mov eax, inLen
-dec eax
-cmp cPos, eax
-je invalid
-
-mov ecx, xStrLen
-mov edi, ecx
-dec edi
-mov esi, 0
-mov ebx, 1
-convertX:
-	movzx eax, BYTE PTR xStr[edi]
-	cmp eax, ' '
-	je skipX
-	cmp eax, 30h
-	jl invalid
-	cmp eax, 39h
-	jg invalid
-
-	sub eax, 30h
-	mul bx
-	shl edx, 16
-	mov dx, ax
-	add esi, edx
-
-	mov eax, ebx
-	mov ebx, 10
-	mul bx
-	shl edx, 16
-	mov dx, ax
-	mov ebx, edx
-
-	dec edi
-skipX:
-	loop convertX
-
-	mov X, esi
-	mov eax, esi
-
-mov ecx, yStrLen
-mov edi, ecx
-dec edi
-mov esi, 0
-mov ebx, 1
-convertY:
-	movzx eax, BYTE PTR yStr[edi]
-	cmp eax, ' '
-	je skipY
-	cmp eax, 30h
-	jl invalid
-	cmp eax, 39h
-	jg invalid
-
-	sub eax, 30h
-	mul bx
-	shl edx, 16
-	mov dx, ax
-	add esi, edx
-
-	mov eax, ebx
-	mov ebx, 10
-	mul bx
-	shl edx, 16
-	mov dx, ax
-	mov ebx, edx
-
-	dec edi
-skipY:
-
-	loop convertY
-	mov Y, esi
-	mov eax, esi
-	jmp checkRng
-
-invalid:
-	mov errorFlg, 1
-	mov edx, OFFSET coordError
-	mov errorOffset, edx
-	mov eax, -1
-	ret
-
-checkRng:
-	mov eax, X
-	mov ebx, Y
-
-	cmp eax, 0
-	jle badDim
-	cmp eax, dimension
-	jg badDim
-
-	cmp ebx, 0
-	jle badDim
-	cmp ebx, dimension
-	jg badDim
-
-	jmp done
-badDim:
-	mov errorFlg, 1
-	mov edx, OFFSET coordMaxError
-	mov errorOffset, edx
-	mov eax, -1
-	ret
-done:
-	mov eax, X
-	mov ebx, Y
-	ret
-enterCoordinates ENDP
 
 ;------------------------------------------
 ;PROCEDURE: youLost
